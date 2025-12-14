@@ -1,190 +1,297 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Generador de Etiquetas para Ubicaciones</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        textarea {
-            width: 100%;
-            height: 120px;
-            margin-bottom: 10px;
-        }
-        @page {
-            size: A4;
-            margin: 5mm;
-        }
-        @media print {
-            body {
-                margin: 0;
-            }
-            #config {
-                display: none;
-            }
-        }
-        .hoja {
-            width: 210mm;
-            height: 297mm;
-            display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important;  /* EXACTAMENTE 3 columnas */
-            grid-template-rows: repeat(8, 1fr) !important;     /* EXACTAMENTE 8 filas */
-            gap: 0 !important;
-            box-sizing: border-box;
-            page-break-after: always;
-            margin-bottom: 10px;
-        }
-        .etiqueta {
-            border: 1px solid #000;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 2mm;
-            box-sizing: border-box;
-            gap: 3mm;
-            height: 100%;
-            overflow: hidden;
-        }
-        .qr {
-            width: 28mm !important;
-            height: 28mm !important;
-            flex: 0 0 28mm;
-            flex-shrink: 0;
-        }
-        .codigoTexto {
-            font-weight: bold;
-            text-align: left;
-            flex: 1;
-            line-height: 1.1;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-        #contadores {
-            margin: 10px 0;
-            font-weight: bold;
-            color: #333;
-        }
-    </style>
-</head>
-<body>
-    <div id="config">
-        <h2>Generador de Etiquetas para Ubicaciones</h2>
-        <p>Escribe un código por línea (sin límite de cantidad)</p>
-        <textarea id="listaCodigos" placeholder="249\n548\nCÓDIGO-MUY-LARGO-QUE-DEBERÍA-AJUSTARSE-AUTOMÁTICAMENTE-12345678901234567890\nABC123\n10XYZ789"></textarea><br>
-        <button id="btnGenerar">Generar etiquetas</button>
-        <div id="contadores"></div>
-        <p>Imprime en A4, escala 100% sin ajustar. ✅ 3×8 = 24 etiquetas por hoja</p>
-    </div>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Etiquetas QR 9x3 en A4 (Múltiples Páginas)</title>
+  <!-- Tailwind CSS para mejorar la UI de configuración -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* Configuración de impresión A4 */
+    @page {
+      size: A4;
+      margin: 5mm; /* Mantiene 5mm de margen del papel (top, right, bottom, left) */
+    }
+
+    /* Estilos de impresión */
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #config {
+        display: none;
+      }
+      
+      /* CAMBIO 2: Forzar salto de página ENTRE cada contenedor .hoja */
+      .hoja {
+        page-break-after: always;
+        /* Asegura que el contenido se imprima sin márgenes adicionales del body */
+        margin: 0; 
+      }
+      
+      /* Elimina el borde de las etiquetas de relleno en la impresión */
+      .etiqueta-vacia {
+        border: none !important;
+        background-color: transparent !important;
+      }
+    }
+
+    /* CSS original de las etiquetas, modificado para permitir el flujo */
+    .hoja {
+      width: 210mm;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr); /* siempre 3 columnas */
+      gap: 0;                                  /* sin espacio entre etiquetas */
+      box-sizing: border-box;
+      align-content: flex-start;
+      justify-content: stretch;
+      font-family: Arial, sans-serif;
+      
+      /* CAMBIO 1: Dimensiones exactas para 9 filas en el área de impresión A4 (287mm) */
+      /* La altura exacta para 9 filas es (297mm - 10mm de margen de página) / 9 ≈ 31.88mm */
+      grid-template-rows: repeat(9, 31.88mm);
+      
+      /* CAMBIO 3: Padding superior para simular un "encabezado" uniforme en todas las hojas */
+      padding-top: 5mm; 
+      
+      /* Altura de A4 (297mm) para visualización, el grid se ajusta por grid-template-rows */
+      height: 297mm; 
+    }
+
+    .etiqueta {
+      border: 1px solid #000;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 1mm;
+      box-sizing: border-box;
+      gap: 2mm;
+    }
     
-    <div id="hoja"></div>
+    /* Etiqueta vacía visible en el preview (para debugging), sin contenido */
+    .etiqueta-vacia {
+        border: 1px dashed #999; 
+    }
 
-    <script>
-        function ajustarTamanoTexto(elemento, textoOriginal) {
-            const clon = document.createElement('div');
-            clon.style.position = 'absolute';
-            clon.style.visibility = 'hidden';
-            clon.style.fontWeight = 'bold';
-            clon.style.lineHeight = '1.1';
-            clon.style.whiteSpace = 'nowrap';
-            clon.style.fontFamily = 'Arial, sans-serif';
-            clon.textContent = textoOriginal;
-            document.body.appendChild(clon);
-            
-            const contenedor = elemento.parentElement;
-            const anchoDisponible = contenedor.offsetWidth - 35;
-            
-            let fontSize = 12;
-            while (fontSize > 6) {
-                clon.style.fontSize = fontSize + 'pt';
-                if (clon.scrollWidth <= anchoDisponible) {
-                    break;
-                }
-                fontSize -= 0.5;
-            }
-            
-            elemento.style.fontSize = fontSize + 'pt';
-            elemento.textContent = textoOriginal;
-            document.body.removeChild(clon);
-            
-            setTimeout(() => {
-                if (elemento.scrollWidth > anchoDisponible) {
-                    elemento.style.whiteSpace = 'normal';
-                    elemento.style.fontSize = Math.max(fontSize - 2, 7) + 'pt';
-                    elemento.style.lineHeight = '1.0';
-                }
-            }, 10);
+    .qr {
+      width: 28mm;
+      height: 28mm;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contenedorTexto {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+    }
+
+    .labelFija {
+      font-size: 8pt;
+      font-weight: bold;
+      margin-bottom: 2px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .codigoTexto {
+      font-size: 12pt;
+      font-weight: bold;
+      text-align: center;
+      white-space: nowrap;
+      word-break: break-all;
+      overflow: hidden;
+      width: 100%;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Arial', 'sans-serif'],
+          },
         }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8">
 
-        function generarEtiquetas() {
-            const contenedorHoja = document.getElementById('hoja');
-            const texto = document.getElementById('listaCodigos').value;
-            const lineas = texto.split(/\n|\r\n/).map(l => l.trim()).filter(l => l !== '');
-            
-            const totalEtiquetas = lineas.length;
-            const hojas = Math.ceil(totalEtiquetas / 24);
-            document.getElementById('contadores').innerHTML = 
-                `Total etiquetas: ${totalEtiquetas} | Hojas A4: ${hojas} (3×8=24 etiquetas/hoja)`;
-            
-            contenedorHoja.innerHTML = '';
-            
-            for (let hojaNum = 0; hojaNum < hojas; hojaNum++) {
-                const nuevaHoja = document.createElement('div');
-                nuevaHoja.className = 'hoja';
-                contenedorHoja.appendChild(nuevaHoja);
-                
-                const inicio = hojaNum * 24;
-                
-                // EXACTAMENTE 24 etiquetas (3×8)
-                for (let i = 0; i < 24; i++) {
-                    const codigo = lineas[inicio + i] || '';
-                    const etiqueta = document.createElement('div');
-                    etiqueta.className = 'etiqueta';
-                    
-                    const divQr = document.createElement('div');
-                    divQr.className = 'qr';
-                    
-                    const divTexto = document.createElement('div');
-                    divTexto.className = 'codigoTexto';
-                    divTexto.textContent = codigo;
-                    
-                    etiqueta.appendChild(divQr);
-                    etiqueta.appendChild(divTexto);
-                    nuevaHoja.appendChild(etiqueta);
-                }
-            }
-            
-            setTimeout(() => {
-                let globalIndex = 0;
-                document.querySelectorAll('.qr').forEach((divQr) => {
-                    if (globalIndex < lineas.length) {
-                        new QRCode(divQr, {
-                            text: lineas[globalIndex],
-                            width: 110,
-                            height: 110,
-                            colorDark: "#000000",
-                            colorLight: "#ffffff"
-                        });
-                    }
-                    globalIndex++;
-                });
-                
-                setTimeout(() => {
-                    let textoIndex = 0;
-                    document.querySelectorAll('.codigoTexto').forEach((elemento) => {
-                        if (textoIndex < lineas.length) {
-                            ajustarTamanoTexto(elemento, lineas[textoIndex]);
-                        }
-                        textoIndex++;
-                    });
-                }, 400);
-            }, 100);
+  <div id="config" class="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow-xl mb-8">
+    <h2 class="text-3xl font-bold text-gray-800 mb-4">Generador de Etiquetas QR (Múltiples Páginas)</h2>
+    <p class="text-gray-600 mb-4">Escribe un código por línea. Se generarán todas las etiquetas, fluyendo automáticamente a nuevas páginas A4 si superan el límite de 27 (9x3).</p>
+    <textarea id="listaCodigos" rows="8" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out font-mono text-sm" placeholder="Ejemplo:&#10;AASDSFDFG89456123VGDFG&#10;B12345678901234567890&#10;C-EQUIPO-001&#10;... (cientos de líneas posibles)"></textarea>
+    
+    <div class="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-blue-50 border border-blue-200 rounded-lg rounded-b-none">
+      <div id="contadorEtiquetas" class="text-gray-700 font-medium mb-2 sm:mb-0">
+        Etiquetas a generar: 0
+      </div>
+      <div id="contadorHojas" class="text-gray-700 font-medium">
+        Hojas A4 estimadas (27/hoja): 0
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center rounded-t-none bg-white p-3 border border-gray-200 rounded-lg border-t-0">
+      <button id="btnGenerar" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150 ease-in-out transform hover:scale-[1.02]">
+        Generar etiquetas para imprimir
+      </button>
+      <p class="text-sm text-gray-500">Recuerda imprimir en A4, escala 100% (sin ajustar a página).</p>
+    </div>
+  </div>
+
+  <!-- Contenedor principal donde se insertarán todas las hojas -->
+  <div id="allPagesContainer">
+    <!-- Las etiquetas generadas aparecerán aquí dentro de los contenedores .hoja -->
+  </div>
+
+  <script>
+    /**
+     * Calcula el tamaño de fuente y el tamaño del QR en función de la longitud del texto.
+     */
+    function obtenerConfigTamano(texto) {
+      const len = texto.replace(/\s+/g, "").length;
+
+      let fontSizePt = 12;
+      if (len > 10) {
+        fontSizePt = Math.max(6, 12 - Math.floor((len - 10) / 5));
+      }
+
+      let qrSizePx = 100;
+      if (len > 10) {
+        qrSizePx = Math.max(60, 100 - (len - 10) * 2);
+      }
+
+      return { fontSizePt, qrSizePx };
+    }
+
+    function generarGrupo() {
+      const allPagesContainer = document.getElementById("allPagesContainer");
+      allPagesContainer.innerHTML = "";
+
+      const texto = document.getElementById("listaCodigos").value;
+
+      const lineas = texto
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(l => l !== "");
+
+      const totalEtiquetas = lineas.length; 
+      const etiquetasPorHoja = 27; 
+      const totalHojas = Math.ceil(totalEtiquetas / etiquetasPorHoja);
+
+      // --- Actualización de Contadores ---
+      document.getElementById("contadorEtiquetas").textContent = `Etiquetas a generar: ${totalEtiquetas}`;
+      document.getElementById("contadorHojas").textContent = `Hojas A4 estimadas (${etiquetasPorHoja}/hoja): ${totalHojas}`;
+      // ------------------------------------
+
+      if (totalEtiquetas === 0) {
+        allPagesContainer.innerHTML = `<div class="p-4 text-center text-gray-500">Introduce los códigos en el campo de texto y haz clic en "Generar etiquetas".</div>`;
+        return;
+      }
+      
+      let currentHoja = document.createElement("div");
+      currentHoja.className = "hoja";
+      allPagesContainer.appendChild(currentHoja);
+
+      for (let i = 0; i < totalEtiquetas; i++) {
+        const codigoOriginal = lineas[i];
+        const limpio = codigoOriginal.replace(/\s+/g, "");
+
+        const cfg = obtenerConfigTamano(limpio);
+
+        const etiqueta = document.createElement("div");
+        etiqueta.className = "etiqueta";
+
+        const divQr = document.createElement("div");
+        divQr.className = "qr";
+
+        const contTexto = document.createElement("div");
+        contTexto.className = "contenedorTexto";
+
+        const labelFija = document.createElement("div");
+        labelFija.className = "labelFija";
+        labelFija.textContent = "UBICACIÓN:";
+
+        const divTexto = document.createElement("div");
+        divTexto.className = "codigoTexto";
+        divTexto.textContent = limpio;
+        divTexto.style.fontSize = cfg.fontSizePt + "pt";
+
+        contTexto.appendChild(labelFija);
+        contTexto.appendChild(divTexto);
+
+        etiqueta.appendChild(divQr);
+        etiqueta.appendChild(contTexto);
+        
+        // Agregar la etiqueta a la hoja actual (esto la adjunta al DOM)
+        currentHoja.appendChild(etiqueta);
+
+        // CORRECCIÓN: Generar el código QR después de que el contenedor esté en el DOM
+        new QRCode(divQr, {
+          text: limpio,
+          width: cfg.qrSizePx,
+          height: cfg.qrSizePx,
+          colorDark: "#000000",
+          colorLight: "#ffffff"
+        });
+
+        // LÓGICA DE SALTO DE PÁGINA: Si completamos 27 etiquetas y NO es la última, creamos una nueva hoja
+        if ((i + 1) % etiquetasPorHoja === 0 && (i + 1) !== totalEtiquetas) {
+            currentHoja = document.createElement("div");
+            currentHoja.className = "hoja";
+            allPagesContainer.appendChild(currentHoja);
         }
+      }
 
-        document.getElementById('btnGenerar').addEventListener('click', generarEtiquetas);
-    </script>
+      // LÓGICA DE RELLENO: Rellenar los espacios vacíos de la última hoja
+      const resto = totalEtiquetas % etiquetasPorHoja;
+
+      if (resto !== 0) {
+          const placeholders = etiquetasPorHoja - resto;
+          console.log(`Rellenando la última hoja con ${placeholders} etiquetas vacías.`);
+
+          for (let j = 0; j < placeholders; j++) {
+              const placeholderEtiqueta = document.createElement("div");
+              placeholderEtiqueta.className = "etiqueta etiqueta-vacia";
+              currentHoja.appendChild(placeholderEtiqueta);
+          }
+      }
+      
+      // Mensaje de consola actualizado
+      setTimeout(() => {
+          console.log(`Se han generado ${totalEtiquetas} etiquetas en ${totalHojas} hojas A4 estimadas. Imprime para garantizar los saltos de página completos.`);
+      }, 100);
+    }
+
+    // Inicialización al cargar la página
+    window.onload = function() {
+        
+        // Llenar el ejemplo inicial si está vacío
+        const textarea = document.getElementById("listaCodigos");
+        if (!textarea.value) {
+            let exampleCodes = [];
+            // Genera 30 códigos para probar el flujo y el relleno de espacios 
+            for(let i = 1; i <= 30; i++) { 
+                exampleCodes.push(`ITEM-ID-${String(i).padStart(3, '0')}`);
+            }
+            textarea.value = exampleCodes.join('\n');
+        }
+        
+        // 3. Generar las etiquetas y contadores iniciales
+        generarGrupo();
+        
+        // 4. Asignar listeners
+        document.getElementById("btnGenerar").addEventListener("click", generarGrupo);
+        document.getElementById("listaCodigos").addEventListener("input", generarGrupo);
+    };
+  </script>
 </body>
 </html>
