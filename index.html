@@ -128,7 +128,7 @@
   <div id="config" class="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow-xl mb-8">
     <h2 class="text-3xl font-bold text-gray-800 mb-4">Generador de Etiquetas QR (Múltiples Páginas)</h2>
     <p class="text-gray-600 mb-4">Escribe un código por línea. Se generarán todas las etiquetas, fluyendo automáticamente a nuevas páginas A4 si superan el límite de 27 (9x3).</p>
-    <textarea id="listaCodigos" rows="8" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out font-mono text-sm" placeholder="Ejemplo:&#10;AASDSFDFG89456123VGDFG&#10;B12345678901234567890&#10;C-EQUIPO-001&#10;... (cientos de líneas posibles)"></textarea>
+    <textarea id="listaCodigos" rows="8" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out font-mono text-sm" placeholder="Inserta aquí tus códigos, uno por línea. Ejemplo:&#10;CODIGO-001&#10;CODIGO-002&#10;..."></textarea>
     
     <div class="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-blue-50 border border-blue-200 rounded-lg rounded-b-none">
       <div id="contadorEtiquetas" class="text-gray-700 font-medium mb-2 sm:mb-0">
@@ -234,7 +234,7 @@
         // Agregar la etiqueta a la hoja actual (esto la adjunta al DOM)
         currentHoja.appendChild(etiqueta);
 
-        // CORRECCIÓN: Generar el código QR después de que el contenedor esté en el DOM
+        // Generar el código QR después de que el contenedor esté en el DOM
         new QRCode(divQr, {
           text: limpio,
           width: cfg.qrSizePx,
@@ -274,18 +274,11 @@
     // Inicialización al cargar la página
     window.onload = function() {
         
-        // Llenar el ejemplo inicial si está vacío
+        // CAMBIO: Inicializa el textarea vacío.
         const textarea = document.getElementById("listaCodigos");
-        if (!textarea.value) {
-            let exampleCodes = [];
-            // Genera 30 códigos para probar el flujo y el relleno de espacios 
-            for(let i = 1; i <= 30; i++) { 
-                exampleCodes.push(`ITEM-ID-${String(i).padStart(3, '0')}`);
-            }
-            textarea.value = exampleCodes.join('\n');
-        }
+        textarea.value = "";
         
-        // 3. Generar las etiquetas y contadores iniciales
+        // 3. Generar las etiquetas y contadores iniciales (mostrará 0 etiquetas)
         generarGrupo();
         
         // 4. Asignar listeners
@@ -295,3 +288,4 @@
   </script>
 </body>
 </html>
+
